@@ -12,7 +12,7 @@ http://nil.csail.mit.edu/6.824/2022/
     - [ ] d
 - [ ] lab3 kvraft
     - [ ] a
-    - [] b
+    - [ ] b
 - [ ] lab4 shardkv
     - [ ] a
     - [ ] b
