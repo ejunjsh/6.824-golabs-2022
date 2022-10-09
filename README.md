@@ -4,7 +4,7 @@ http://nil.csail.mit.edu/6.824/2022/
 
 ## progress
 
-- [ ] lab1 mr
+- [x] [lab1 mr](http://nil.csail.mit.edu/6.824/2022/labs/lab-mr.html)
 - [ ] lab2 raft
     - [ ] a
     - [ ] b

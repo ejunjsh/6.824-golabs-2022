@@ -8,6 +8,7 @@ package mr
 
 import "os"
 import "strconv"
+import "fmt"
 
 //
 // example to show how to declare the arguments
@@ -22,7 +23,57 @@ type ExampleReply struct {
 	Y int
 }
 
+type TaskPhase int
+
+const (
+	MapPhase    TaskPhase = 0
+	ReducePhase TaskPhase = 1
+)
+
+
+type Task struct {
+	FileName      string
+	NReduce       int
+	NMaps         int
+	Seq           int
+	Phase         TaskPhase
+	Alive         bool	// worker should exit when alive is false
+}
+
+func reduceName(mapIdx, reduceIdx int) string {
+	return fmt.Sprintf("mr-%d-%d", mapIdx, reduceIdx)
+}
+
+func mergeName(reduceIdx int) string {
+	return fmt.Sprintf("mr-out-%d", reduceIdx)
+}
+
 // Add your RPC definitions here.
+
+type TaskArgs struct {
+	WorkerId int
+}
+
+type TaskReply struct {
+	Task *Task
+}
+
+type ReportTaskArgs struct {
+	Done     bool
+	Seq      int
+	Phase    TaskPhase
+	WorkerId int
+}
+
+type ReportTaskReply struct {
+}
+
+type RegisterArgs struct {
+}
+
+type RegisterReply struct {
+	WorkerId int
+}
 
 
 // Cook up a unique-ish UNIX-domain socket name
