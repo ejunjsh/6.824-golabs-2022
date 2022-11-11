@@ -18,14 +18,16 @@ package raft
 //
 
 import (
-	//	"bytes"
+    "bytes"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	//	"6.824/labgob"
+	"6.824/labgob"
 	"6.824/labrpc"
+
+	"log"
 )
 
 //
@@ -155,6 +157,14 @@ func (rf *Raft) persist() {
 	// e.Encode(rf.yyy)
 	// data := w.Bytes()
 	// rf.persister.SaveRaftState(data)
+
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.log)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 
@@ -178,6 +188,23 @@ func (rf *Raft) readPersist(data []byte) {
 	//   rf.xxx = xxx
 	//   rf.yyy = yyy
 	// }
+
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+
+	var term int
+	var votedFor int
+	var logs []LogEntry
+
+	if d.Decode(&term) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&logs) != nil {
+		log.Fatal("raft read persist error")
+	} else {
+		rf.currentTerm = term
+		rf.votedFor = votedFor
+		rf.log = logs
+	}
 }
 
 
@@ -255,6 +282,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 
 	if lastLogTerm > args.LastLogTerm || (lastLogTerm == args.LastLogTerm && lastLogIndex > args.LastLogIndex){
+		rf.persist()
 		return 
 	}
 
@@ -264,6 +292,9 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.resetElectionTimer()
 
 	reply.VoteGranted = true
+
+	rf.persist()
+
 	return 
 }
 
@@ -341,6 +372,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Command: command,
 		})
 		rf.matchIndex[rf.me] = index
+		rf.persist()
 	}
 
 	return index, term, isLeader
@@ -431,6 +463,7 @@ func (rf *Raft) election(){
 					rf.changeToFollower()
 					rf.votedFor = -1
 					rf.resetElectionTimer()
+					rf.persist()
 				}
 				rf.mu.Unlock()
 			}
@@ -520,6 +553,7 @@ func (rf *Raft) heartbeat(server int){
 				rf.changeToFollower()
 				rf.votedFor = -1
 				rf.resetElectionTimer()
+				rf.persist()
 			}
 			rf.mu.Unlock()
 			return
@@ -632,6 +666,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			}
 			rf.notifyApplyCh <- struct{}{}
 		}
+		rf.persist()
 	}
 }
 
