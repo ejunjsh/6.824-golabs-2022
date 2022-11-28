@@ -5,15 +5,15 @@ http://nil.csail.mit.edu/6.824/2022/
 ## progress
 
 - [x] [lab1 mr](http://nil.csail.mit.edu/6.824/2022/labs/lab-mr.html)
-- [ ] [lab2 raft](https://pdos.csail.mit.edu/6.824/labs/lab-raft.html)
+- [x] [lab2 raft](http://nil.csail.mit.edu/6.824/2022/labs/lab-raft.html)
     - [x] 2A leader election
     - [x] 2B log
     - [x] 2C persistence
-    - [ ] 2D
-- [ ] lab3 kvraft
+    - [x] 2D log compaction
+- [ ] [lab3 kvraft](http://nil.csail.mit.edu/6.824/2022/labs/lab-kvraft.html)
     - [ ] 3A
     - [ ] 3B
-- [ ] lab4 shardkv
+- [ ] [lab4 shardkv](http://nil.csail.mit.edu/6.824/2022/labs/lab-shard.html)
     - [ ] 4A
     - [ ] 4B
     - [ ] challenge1
