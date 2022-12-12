@@ -116,6 +116,7 @@ type Raft struct {
 
 	killCh        chan struct{}
 	notifyApplyCh chan struct{}
+	notifySnapCh chan ApplyMsg
 
 	lastSnapshotIndex int
 	lastSnapshotTerm  int
@@ -422,6 +423,15 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		})
 		rf.matchIndex[rf.me] = index
 		rf.persist()
+
+		rf.resetHeartbeatTimer()
+		for index := range rf.peers {
+			if rf.me == index {
+				continue
+			} else {
+				go rf.heartbeat(index)
+			}
+		}
 	}
 
 	return index, term, isLeader
@@ -703,6 +713,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 
+	if len(args.Entries) == 0 && (lastLogTerm > args.PervLogTerm || (lastLogTerm == args.PervLogTerm && lastLogIndex > args.PrevLogIndex)) {
+		reply.Abandon = true
+		return
+	}
+
 	if args.PrevLogIndex > lastLogIndex || args.PrevLogIndex < rf.lastSnapshotIndex {
 		reply.Success = false
 		reply.LogIndex = lastLogIndex
@@ -806,6 +821,29 @@ func (rf *Raft) applyLog() {
 				continue
 			}
 			rf.mu.Unlock()
+		case msg := <- rf.notifySnapCh:
+			rf.mu.Lock()
+			if rf.lastSnapshotIndex >= msg.SnapshotIndex || rf.lastApplied >= msg.SnapshotIndex {
+				rf.mu.Unlock()
+				continue
+			}
+			start := msg.SnapshotIndex - rf.lastSnapshotIndex
+			if start >= len(rf.log) {
+				rf.log = make([]LogEntry, 1)
+				rf.log[0].Term = msg.SnapshotTerm
+			} else {
+				rf.log = rf.log[start:]
+				rf.log[0].Term = msg.SnapshotTerm
+			}
+		
+			rf.lastSnapshotIndex = msg.SnapshotIndex
+			rf.lastSnapshotTerm = msg.SnapshotTerm
+			rf.persister.SaveStateAndSnapshot(rf.getRaftStatePersistData(), msg.Snapshot)
+		
+			rf.lastApplied = rf.lastSnapshotIndex
+
+			rf.mu.Unlock()
+		    rf.applyCh <- msg
 		}
 	}
 }
@@ -830,28 +868,13 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		return
 	}
 
-	start := args.LastIncludedIndex - rf.lastSnapshotIndex
-	if start >= len(rf.log) {
-		rf.log = make([]LogEntry, 1)
-		rf.log[0].Term = args.LastIncludedTerm
-	} else {
-		rf.log = rf.log[start:]
-		rf.log[0].Term = args.LastIncludedTerm
-	}
-
-	rf.lastSnapshotIndex = args.LastIncludedIndex
-	rf.lastSnapshotTerm = args.LastIncludedTerm
-	rf.persister.SaveStateAndSnapshot(rf.getRaftStatePersistData(), args.Data)
-
-	rf.lastApplied = rf.lastSnapshotIndex
-
 	rf.mu.Unlock()
 
-	rf.applyCh <- ApplyMsg{
+	rf.notifySnapCh <- ApplyMsg{
 		SnapshotValid: true,
 		Snapshot:      args.Data,
-		SnapshotTerm:  rf.lastSnapshotTerm,
-		SnapshotIndex: rf.lastSnapshotIndex,
+		SnapshotTerm:  args.LastIncludedTerm,
+		SnapshotIndex: args.LastIncludedIndex,
 	}
 }
 
@@ -929,6 +952,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.heartbeatTimer = time.NewTimer(HeartBeatTimeout)
 
 	rf.notifyApplyCh = make(chan struct{}, 100)
+
+	rf.notifySnapCh = make(chan ApplyMsg, 10)
 
 	rf.lastApplied = rf.lastSnapshotIndex
 
