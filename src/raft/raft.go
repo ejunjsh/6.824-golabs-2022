@@ -650,10 +650,14 @@ func (rf *Raft) heartbeat(server int) {
 					nextIndex = rf.lastSnapshotIndex + 1
 					rf.appendSnapshot(server)
 				} else {
-					if rf.log[reply.LogIndex-rf.lastSnapshotIndex].Term == reply.LogTerm {
-						nextIndex = reply.LogIndex + 1
-					} else {
-						nextIndex = reply.LogIndex
+					if reply.LogIndex-rf.lastSnapshotIndex > len(rf.log) - 1{
+						nextIndex = rf.lastSnapshotIndex + 1
+					} else{
+						if rf.log[reply.LogIndex-rf.lastSnapshotIndex].Term == reply.LogTerm {
+							nextIndex = reply.LogIndex + 1
+						} else {
+							nextIndex = reply.LogIndex
+						}
 					}
 				}
 			}
@@ -749,9 +753,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	}
 }
 
-func (rf *Raft) getLogByIndex(index int) LogEntry {
-	return rf.log[index]
-}
 
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)

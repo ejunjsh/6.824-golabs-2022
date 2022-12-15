@@ -69,6 +69,7 @@ func (ck *Clerk) Get(key string) string {
 			leaderId = (leaderId + 1) % len(ck.servers)
 			continue
 		case ErrTimeOut:
+			leaderId = (leaderId + 1) % len(ck.servers)
 			continue
 		default:
 			time.Sleep(time.Millisecond * 20)
@@ -117,6 +118,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 			leaderId = (leaderId + 1) % len(ck.servers)
 			continue
 		case ErrTimeOut:
+			leaderId = (leaderId + 1) % len(ck.servers)
 			continue
 		default:
 			log.Fatal("client unknown err", reply.Err)

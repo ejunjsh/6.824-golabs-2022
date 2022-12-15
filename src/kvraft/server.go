@@ -1,14 +1,15 @@
 package kvraft
 
 import (
-	"6.824/labgob"
-	"6.824/labrpc"
-	"6.824/raft"
+	"bytes"
 	"log"
 	"sync"
 	"sync/atomic"
-	"bytes"
 	"time"
+
+	"6.824/labgob"
+	"6.824/labrpc"
+	"6.824/raft"
 )
 
 const Debug = true
@@ -114,44 +115,56 @@ func (kv *KVServer) applier(){
 		case <-kv.killCh:
 			return
 		case msg := <-kv.applyCh:
-			op := msg.Command.(Op)
+			if msg.CommandValid{
+				op := msg.Command.(Op)
 
-			kv.mu.Lock()
+				kv.mu.Lock()
 
-			switch op.Method {
-			case "Put":
-				if v, ok:=kv.clientLastSeqNum[op.ClientId];!ok || v < op.SeqNum {
-					kv.set(op.Key, op.Value)
-					kv.clientLastSeqNum[op.ClientId] = op.SeqNum
-				}
-			case "Append":
-				if v, ok:=kv.clientLastSeqNum[op.ClientId];!ok || v < op.SeqNum {
-					_, v := kv.get(op.Key)
-					kv.set(op.Key,  v + op.Value)
-					kv.clientLastSeqNum[op.ClientId] = op.SeqNum
-				}
-			case "Get":
-				kv.clientLastSeqNum[op.ClientId] = op.SeqNum
-			default:
-				log.Fatalf("unknown method: %s", op.Method)
-			}
-			
-			if ch, ok := kv.notifyChes[op.SeqNum]; ok {
-				_, v := kv.get(op.Key)
-				kv.mu.Unlock()
-				go func(){
-					t := time.NewTimer(time.Millisecond * 50000)
-					select{
-						case ch <- NotifyMsg{
-							Err:   OK,
-							Value: v,
-						} :
-						case <-t.C:
+				switch op.Method {
+				case "Put":
+					if v, ok:=kv.clientLastSeqNum[op.ClientId];!ok || v < op.SeqNum {
+						kv.set(op.Key, op.Value)
+						kv.clientLastSeqNum[op.ClientId] = op.SeqNum
 					}
-				}()
-				continue
+				case "Append":
+					if v, ok:=kv.clientLastSeqNum[op.ClientId];!ok || v < op.SeqNum {
+						_, v := kv.get(op.Key)
+						kv.set(op.Key,  v + op.Value)
+						kv.clientLastSeqNum[op.ClientId] = op.SeqNum
+					}
+				case "Get":
+					kv.clientLastSeqNum[op.ClientId] = op.SeqNum
+				default:
+					log.Fatalf("unknown method: %s", op.Method)
+				}
+				
+				if ch, ok := kv.notifyChes[op.SeqNum]; ok {
+					_, v := kv.get(op.Key)
+					go func(){
+						t := time.NewTimer(time.Millisecond * 50000)
+						defer t.Stop()
+						select{
+							case ch <- NotifyMsg{
+								Err:   OK,
+								Value: v,
+							} :
+							case <-t.C:
+						}
+					}()
+				}
+				kv.mu.Unlock()
+
+				if kv.maxraftstate != -1 && kv.persister.RaftStateSize() >= kv.maxraftstate * 9 / 10 {
+					data := kv.encodeKVData()
+					kv.rf.Snapshot(msg.CommandIndex, data)
+				}
+			} else {
+				if msg.SnapshotValid {
+					kv.mu.Lock()
+					kv.recover(msg.Snapshot)
+					kv.mu.Unlock()
+				}
 			}
-			kv.mu.Unlock()
 		}
 	}
 }
@@ -185,8 +198,10 @@ func (kv *KVServer) start(op Op) (res NotifyMsg){
 	}
 }
 
-func (kv *KVServer) recover(){
-	data := kv.persister.ReadSnapshot()
+func (kv *KVServer) recover(data []byte){
+	if data == nil || len(data) < 1 { 
+		data = kv.persister.ReadSnapshot()
+	}
 
 	if data == nil || len(data) < 1 { 
 		return
@@ -195,12 +210,14 @@ func (kv *KVServer) recover(){
 	r := bytes.NewBuffer(data)
 	d := labgob.NewDecoder(r)
 
-	var kvData map[string]string
+	var kvData map[string]string 
+	var clientLastSeqNum map[int64]int64
 
-	if d.Decode(&kvData) != nil {
+	if d.Decode(&kvData) != nil ||  d.Decode(&clientLastSeqNum) != nil{
 		log.Fatal("kv recover err")
 	} else {
 		kv.MemoryStorage = kvData
+		kv.clientLastSeqNum = clientLastSeqNum
 	}
 }
 
@@ -210,9 +227,13 @@ func (kv *KVServer) encodeKVData() []byte {
 	if err := e.Encode(kv.MemoryStorage); err != nil {
 		panic(err)
 	}
+	if err := e.Encode(kv.clientLastSeqNum); err != nil {
+		panic(err)
+	}
 	data := w.Bytes()
 	return data
 }
+
 
 //
 // the tester calls Kill() when a KVServer instance won't
@@ -272,7 +293,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.killCh = make(chan struct{})
 	kv.notifyChes = make(map[int64]chan NotifyMsg)
 	
-	kv.recover()
+	kv.recover(nil)
 
 	go kv.applier()
 
