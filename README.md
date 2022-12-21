@@ -14,7 +14,7 @@ http://nil.csail.mit.edu/6.824/2022/
     - [x] 3A Key/value service without snapshots
     - [x] 3B log compaction
 - [ ] [lab4 shardkv](http://nil.csail.mit.edu/6.824/2022/labs/lab-shard.html)
-    - [ ] 4A
+    - [x] 4A The Shard controller
     - [ ] 4B
     - [ ] challenge1
     - [ ] challenge2

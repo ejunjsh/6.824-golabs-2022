@@ -28,6 +28,7 @@ type Op struct {
 	// otherwise RPC will break.
 	SeqNum int64
 	ClientId int64
+	NotifyId int64
 	Key string
 	Value string
 	Method string
@@ -51,9 +52,6 @@ type KVServer struct {
 	notifyChes map[int64]chan NotifyMsg
 
 	clientLastSeqNum map[int64]int64
-
-	lastApplyIndex int
-	lastApplyTerm  int
 }
 
 type MemoryStorage map[string]string
@@ -86,6 +84,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 		Key:      args.Key,
 		Method:   "Get",
 		ClientId: args.ClientId,
+		NotifyId: nrand(),
 	}
 	res := kv.start(op)
 	reply.Err = res.Err
@@ -105,6 +104,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 		Value:    args.Value,
 		Method:   args.Op,
 		ClientId: args.ClientId,
+		NotifyId: nrand(),
 	}
 	reply.Err = kv.start(op).Err
 }
@@ -133,12 +133,11 @@ func (kv *KVServer) applier(){
 						kv.clientLastSeqNum[op.ClientId] = op.SeqNum
 					}
 				case "Get":
-					kv.clientLastSeqNum[op.ClientId] = op.SeqNum
 				default:
 					log.Fatalf("unknown method: %s", op.Method)
 				}
 				
-				if ch, ok := kv.notifyChes[op.SeqNum]; ok {
+				if ch, ok := kv.notifyChes[op.NotifyId]; ok {
 					_, v := kv.get(op.Key)
 					go func(){
 						t := time.NewTimer(time.Millisecond * 50000)
@@ -178,7 +177,7 @@ func (kv *KVServer) start(op Op) (res NotifyMsg){
 
 	kv.mu.Lock()
 	ch := make(chan NotifyMsg, 1)
-	kv.notifyChes[op.SeqNum] = ch
+	kv.notifyChes[op.NotifyId] = ch
 	kv.mu.Unlock()
 
 	t := time.NewTimer(time.Millisecond * 300)
@@ -186,12 +185,12 @@ func (kv *KVServer) start(op Op) (res NotifyMsg){
 	select {
 	case res = <-ch:
 		kv.mu.Lock()
-		delete(kv.notifyChes,op.SeqNum)
+		delete(kv.notifyChes,op.NotifyId)
 		kv.mu.Unlock()
 		return
 	case <-t.C:
 		kv.mu.Lock()
-		delete(kv.notifyChes,op.SeqNum)
+		delete(kv.notifyChes,op.NotifyId)
 		kv.mu.Unlock()
 		res.Err = ErrTimeOut
 		return
