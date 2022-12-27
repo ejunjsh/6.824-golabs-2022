@@ -952,7 +952,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimer = time.NewTimer(randomizeElectionTimeout())
 	rf.heartbeatTimer = time.NewTimer(HeartBeatTimeout)
 
-	rf.notifyApplyCh = make(chan struct{}, 100)
+	rf.notifyApplyCh = make(chan struct{}, 10000)
 
 	rf.notifySnapCh = make(chan ApplyMsg, 10)
 

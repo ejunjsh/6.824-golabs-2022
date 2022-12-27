@@ -13,9 +13,9 @@ http://nil.csail.mit.edu/6.824/2022/
 - [x] [lab3 kvraft](http://nil.csail.mit.edu/6.824/2022/labs/lab-kvraft.html)
     - [x] 3A Key/value service without snapshots
     - [x] 3B log compaction
-- [ ] [lab4 shardkv](http://nil.csail.mit.edu/6.824/2022/labs/lab-shard.html)
+- [x] [lab4 shardkv](http://nil.csail.mit.edu/6.824/2022/labs/lab-shard.html)
     - [x] 4A The Shard controller
-    - [ ] 4B
-    - [ ] challenge1
-    - [ ] challenge2
-    - [ ] challenge3
+    - [x] 4B Sharded Key/Value Server
+    - [x] challenge1 shard deletion
+    - [x] challenge2 unaffected shard access
+    - [x] challenge3 partial migration shard access 
