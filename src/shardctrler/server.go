@@ -203,14 +203,7 @@ func (sc *ShardCtrler) applier(){
 				   res.Config = sc.getConfigByIndex(op.Args.(QueryArgs).Num)
 				}
 				if ch, ok := sc.notifyChes[op.NotifyId]; ok {
-					go func(){
-						t := time.NewTimer(time.Millisecond * 50000)
-						defer t.Stop()
-						select{
-							case ch <- res :
-							case <-t.C:
-						}
-					}()
+					ch <- res 
 				}
 				sc.mu.Unlock()
 			}
@@ -288,7 +281,6 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 	if len(config.Groups) == 0 {
 		config.Shards = [NShards]int{}
 	} else if len(config.Groups) == 1 {
-		// set shards one gid
 		for k, _ := range config.Groups {
 			for i, _ := range config.Shards {
 				config.Shards[i] = k
@@ -296,7 +288,6 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 		}
 	} else if len(config.Groups) <= NShards {
 		avg := NShards / len(config.Groups)
-		// 每个 gid 分 avg 个 shard
 		otherShardsCount := NShards - avg*len(config.Groups)
 		needLoop := false
 		lastGid := 0
@@ -310,18 +301,15 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 		for _, gid := range keys {
 			lastGid = gid
 			count := 0
-			// 先 count 已有的
 			for _, val := range config.Shards {
 				if val == gid {
 					count += 1
 				}
 			}
 
-			// 判断是否需要改变
 			if count == avg {
 				continue
 			} else if count > avg && otherShardsCount == 0 {
-				// 减少到 avg
 				c := 0
 				for i, val := range config.Shards {
 					if val == gid {
@@ -334,8 +322,6 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 				}
 
 			} else if count > avg && otherShardsCount > 0 {
-				// 减到 othersShardsCount 为 0
-				// 若还 count > avg, set to 0
 				c := 0
 				for i, val := range config.Shards {
 					if val == gid {
@@ -353,7 +339,6 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 				}
 
 			} else {
-				// count < avg, 此时有可能没有位置
 				for i, val := range config.Shards {
 					if count == avg {
 						break
@@ -376,7 +361,6 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 			goto LOOP
 		}
 
-		// 可能每一个 gid 都 >= avg，但此时有空的 shard
 		if lastGid != 0 {
 			for i, val := range config.Shards {
 				if val == 0 {
@@ -386,8 +370,6 @@ func (sc *ShardCtrler) adjustConfig(config *Config) {
 		}
 
 	} else {
-		// len(config.Groups) > NShards
-		// 每个 gid 最多一个， 会有空余 gid
 		gids := make(map[int]int)
 		emptyShards := make([]int, 0, NShards)
 		for i, gid := range config.Shards {

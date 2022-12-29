@@ -426,17 +426,10 @@ func (kv *ShardKV) applyOp(msg raft.ApplyMsg, op Op){
 		
 		if ch, ok := kv.notifyChes[op.NotifyId]; ok {
 			_, v := kv.get(op.Key)
-			go func(){
-				t := time.NewTimer(time.Millisecond * 50000)
-				defer t.Stop()
-				select{
-					case ch <- NotifyMsg{
-						Err:   OK,
-						Value: v,
-					} :
-					case <-t.C:
-				}
-			}()
+			ch <- NotifyMsg{
+				Err:   OK,
+				Value: v,
+			}
 		}
 		kv.mu.Unlock()
 
